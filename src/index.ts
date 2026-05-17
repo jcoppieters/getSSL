@@ -215,12 +215,12 @@ class SSLManager {
   /**
    * Get paths for certificate files
    */
-  private getCertPaths(siteName: string) {
+  private getCertPaths(certName: string) {
     return {
-      certFile: path.join(this.certDir, `${siteName}.crt`),
-      keyFile: path.join(this.certDir, `${siteName}.key`),
-      chainFile: path.join(this.certDir, `${siteName}.chain.crt`),
-      fullChainFile: path.join(this.certDir, `${siteName}.fullchain.crt`)
+      certFile: path.join(this.certDir, `${certName}.crt`),
+      keyFile: path.join(this.certDir, `${certName}.key`),
+      chainFile: path.join(this.certDir, `${certName}.chain.crt`),
+      fullChainFile: path.join(this.certDir, `${certName}.fullchain.crt`)
     };
   }
 
@@ -274,9 +274,9 @@ class SSLManager {
   /**
    * Convert PFX to separate certificate and private key files using OpenSSL
    */
-  private convertPfxToPem(pfxBuffer: Buffer, siteName: string): void {
-    const paths = this.getCertPaths(siteName);
-    const tempPfxPath = path.join(this.certDir, `${siteName}.temp.pfx`);
+  private convertPfxToPem(pfxBuffer: Buffer, certName: string): void {
+    const paths = this.getCertPaths(certName);
+    const tempPfxPath = path.join(this.certDir, `${certName}.temp.pfx`);
 
     try {
       // Create cert directory if it doesn't exist
@@ -357,8 +357,9 @@ class SSLManager {
   /**
    * Install certificate files
    */
-  private async installCertificate(siteName: string, cert: CombellSSLCertificateDetail): Promise<void> {
-    const paths = this.getCertPaths(siteName);
+  private async installCertificate(siteName: string, cert: CombellSSLCertificateDetail, certName?: string): Promise<void> {
+    const actualCertName = certName || siteName;
+    const paths = this.getCertPaths(actualCertName);
 
     if (this.testMode) {
       console.log('\n📝 Certificate Information:');
@@ -399,7 +400,7 @@ class SSLManager {
     console.log(`Downloaded ${pfxBuffer.length} bytes`);
 
     // Convert PFX to PEM format
-    this.convertPfxToPem(pfxBuffer, siteName);
+    this.convertPfxToPem(pfxBuffer, actualCertName);
 
     console.log(`\nCertificate installed successfully!`);
     console.log(`Valid until: ${cert.expires_after}`);
@@ -453,21 +454,28 @@ class SSLManager {
   /**
    * Main process to update SSL certificate
    */
-  async updateSSL(siteName: string): Promise<void> {
-    console.log(`\n=== SSL Certificate Update for ${siteName} ===\n`);
+  async updateSSL(siteName: string, certName?: string): Promise<void> {
+    const actualCertName = certName || siteName;
+    
+    console.log(`\n=== SSL Certificate Update ===`);
+    console.log(`Domain: ${siteName}`);
+    if (certName) {
+      console.log(`Certificate files: ${certName}.*`);
+    }
+    console.log('');
 
     // Fetch certificate from Combell API
     const cert = await this.fetchCertificate(siteName);
 
     // Check if update is needed
-    const paths = this.getCertPaths(siteName);
+    const paths = this.getCertPaths(actualCertName);
     if (!this.shouldUpdateCertificate(paths.certFile, cert.expires_after)) {
       console.log('\nNo update needed. Exiting.');
       return;
     }
 
     // Install certificate
-    await this.installCertificate(siteName, cert);
+    await this.installCertificate(siteName, cert, actualCertName);
 
     if (this.testMode) {
       console.log('\n🧪 TEST MODE - Skipping nginx operations');
@@ -492,31 +500,43 @@ async function main() {
 
   // Parse arguments
   let siteName = '';
+  let certName = '';
   let testMode = false;
+  const positionalArgs: string[] = [];
 
   for (const arg of args) {
     if (arg === '--test' || arg === '-t' || arg === '--dry-run') {
       testMode = true;
     } else if (!arg.startsWith('-')) {
-      siteName = arg;
+      positionalArgs.push(arg);
     }
   }
 
+  siteName = positionalArgs[0] || '';
+  certName = positionalArgs[1] || '';
+
   if (!siteName) {
-    console.error('Usage: getssl [--test] <site-name>');
+    console.error('Usage: getssl [--test] <domain-name> [cert-name]');
+    console.error('');
+    console.error('Arguments:');
+    console.error('  domain-name              Domain name to fetch from Combell API');
+    console.error('  cert-name                Optional: Base name for certificate files');
+    console.error('                           (defaults to domain-name if not specified)');
     console.error('');
     console.error('Options:');
     console.error('  --test, -t, --dry-run    Run in test mode (no changes made)');
     console.error('');
     console.error('Examples:');
     console.error('  getssl de-essen.be');
+    console.error('  getssl de-essen.be essen');
+    console.error('  getssl rooigemhuisartsenpraktijk.be rooigem');
     console.error('  getssl --test de-essen.be');
     process.exit(1);
   }
 
   try {
     const manager = new SSLManager(testMode);
-    await manager.updateSSL(siteName);
+    await manager.updateSSL(siteName, certName || undefined);
   } catch (error: any) {
     console.error('\n✗ Error:', error.message);
     process.exit(1);

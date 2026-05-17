@@ -101,8 +101,11 @@ Test mode will:
 ### Manual Run
 
 ```bash
-# Using npm
+# Using npm (certificate files will use domain name)
 npm start de-essen.be
+
+# Using npm with custom certificate name
+npm start rooigemhuisartsenpraktijk.be rooigem
 
 # Using npm with test mode
 npm start -- --test de-essen.be
@@ -110,14 +113,29 @@ npm start -- --test de-essen.be
 # If installed globally or symlinked
 getssl de-essen.be
 
+# With custom certificate name
+getssl rooigemhuisartsenpraktijk.be rooigem
+
 # Test mode
 getssl --test de-essen.be
 
 # With sudo (required for nginx operations in production)
 sudo -E npm start de-essen.be
 # or
-sudo getssl de-essen.be
+sudo getssl rooigemhuisartsenpraktijk.be rooigem
 ```
+
+**Custom Certificate Names:**
+
+If your nginx configuration uses shorter certificate names (e.g., `rooigem.crt` instead of `rooigemhuisartsenpraktijk.be.crt`), you can specify the certificate file base name as a second parameter:
+
+```bash
+getssl rooigemhuisartsenpraktijk.be rooigem
+```
+
+This will:
+- Look up the certificate for `rooigemhuisartsenpraktijk.be` in Combell
+- Save the files as `rooigem.crt`, `rooigem.key`, `rooigem.chain.crt`, `rooigem.fullchain.crt`
 
 ### Running from Crontab
 
@@ -138,8 +156,11 @@ To automatically check and update SSL certificates daily:
    ```cron
    # Check SSL certificates daily at 3:00 AM
    0 3 * * * cd /opt/getssl && /usr/bin/node dist/index.js de-essen.be >> /var/log/getssl-de-essen.log 2>&1
+   0 3 * * * cd /opt/getssl && /usr/bin/node dist/index.js rooigemhuisartsenpraktijk.be rooigem >> /var/log/getssl-rooigem.log 2>&1
    0 3 * * * cd /opt/getssl && /usr/bin/node dist/index.js example.com >> /var/log/getssl-example.log 2>&1
    ```
+
+   **Note:** The second parameter (e.g., `rooigem`) is the base name for certificate files if your nginx config uses shorter names than the full domain.
 
 3. Make sure the `.env` file is readable by root:
    ```bash
