@@ -355,6 +355,55 @@ class SSLManager {
   }
 
   /**
+   * Validate PFX file content using OpenSSL
+   */
+  private validatePfxContent(pfxBuffer: Buffer, certName: string): void {
+    const tempPfxPath = `/tmp/${certName}-test.pfx`;
+    
+    try {
+      // Write PFX to temporary file
+      fs.writeFileSync(tempPfxPath, pfxBuffer, { mode: 0o600 });
+
+      console.log('\n🔍 Validating PFX content...');
+
+      // Try to list contents of PFX file
+      try {
+        const output = execSync(
+          `openssl pkcs12 -in "${tempPfxPath}" -passin pass:"${this.pfxPassword}" -nokeys -clcerts -noout -info 2>&1 || openssl pkcs12 -in "${tempPfxPath}" -passin pass:"${this.pfxPassword}" -info -noout 2>&1`,
+          { encoding: 'utf8' }
+        );
+        console.log('  ✓ PFX file is valid and password is correct');
+      } catch (error: any) {
+        throw new Error(`PFX validation failed: ${error.message}`);
+      }
+
+      // Extract and display certificate info
+      try {
+        const certInfo = execSync(
+          `openssl pkcs12 -in "${tempPfxPath}" -passin pass:"${this.pfxPassword}" -clcerts -nokeys 2>/dev/null | openssl x509 -noout -subject -dates -issuer 2>/dev/null`,
+          { encoding: 'utf8' }
+        );
+        
+        if (certInfo) {
+          console.log('\n📋 Certificate details from PFX:');
+          certInfo.split('\n').filter(line => line.trim()).forEach(line => {
+            console.log(`  ${line}`);
+          });
+        }
+      } catch (error) {
+        // Non-critical error, just skip showing details
+        console.log('  ℹ Could not extract detailed certificate info');
+      }
+
+    } finally {
+      // Clean up temporary file
+      if (fs.existsSync(tempPfxPath)) {
+        fs.unlinkSync(tempPfxPath);
+      }
+    }
+  }
+
+  /**
    * Install certificate files
    */
   private async installCertificate(siteName: string, cert: CombellSSLCertificateDetail, certName?: string): Promise<void> {
@@ -384,9 +433,26 @@ class SSLManager {
 
       if (!this.pfxPassword) {
         console.log(`\n⚠️  PFX_PASSWORD not set - certificate download would be skipped`);
-      } else {
-        console.log(`\n✓ PFX_PASSWORD is set - certificate download would proceed`);
+        return;
       }
+
+      // In test mode, download and validate the PFX file
+      console.log(`\n✓ PFX_PASSWORD is set - testing certificate download...`);
+      
+      try {
+        const pfxBuffer = await this.downloadPfxCertificate(cert.sha1_fingerprint);
+        console.log(`  ✓ Downloaded ${pfxBuffer.length} bytes`);
+        
+        // Validate PFX content
+        this.validatePfxContent(pfxBuffer, actualCertName);
+        
+        console.log('\n✅ Download and validation successful!');
+        console.log('   Files would be installed in production mode.');
+      } catch (error: any) {
+        console.error(`\n❌ Download/validation failed: ${error.message}`);
+        throw error;
+      }
+      
       return;
     }
 
