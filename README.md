@@ -23,12 +23,7 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
 
 ⚠️ **Authentication**: The Combell API uses HMAC (Hash-based Message Authentication Code), not simple API keys  
 ⚠️ **IP Whitelisting**: You **must** whitelist your server's IP address in the Combell control panel under API settings  
-⚠️ **Certificate Format**: The API only provides SSL certificates as PFX (PKCS#12) files that require a password to decrypt
-
-**Current Limitation**: This tool can currently only **list and view** SSL certificate information from the Combell API. To fully automate certificate installation, you would need to:
-1. Add PFX password support
-2. Convert PFX to separate .crt and .key files using OpenSSL
-3. Pull request welcome! 😊
+✅ **Certificate Download**: SSL certificates are downloaded as PFX (PKCS#12) files and automatically converted to nginx-compatible formats
 
 ## Installation
 
@@ -64,7 +59,10 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
    ```
    COMBELL_API_KEY=your_actual_api_key
    COMBELL_API_SECRET=your_actual_api_secret
+   PFX_PASSWORD=your_secure_password
    ```
+
+   **Note**: The `PFX_PASSWORD` is used to encrypt/decrypt the certificate file when downloading from Combell. Choose a strong password and keep it secure.
 
 6. (Optional) Install globally or create a symlink:
    ```bash
@@ -155,6 +153,7 @@ To automatically check and update SSL certificates daily:
 
 - `COMBELL_API_KEY` (required): Your Combell API key
 - `COMBELL_API_SECRET` (required): Your Combell API secret
+- `PFX_PASSWORD` (required for production): Password used to encrypt/decrypt PFX certificate files. Not required in test mode.
 - `NGINX_SITES_ENABLED_DIR` (optional): Override nginx sites-enabled directory (default: `/etc/nginx/sites-enabled`)
 - `NGINX_CERT_DIR` (optional): Override certificate storage directory (default: `/etc/nginx/ssl`)
 
@@ -188,11 +187,14 @@ server {
 
 ## How It Works
 
-1. **Fetch**: Connects to Combell API and retrieves the SSL certificate for the specified domain
-2. **Compare**: Checks if the certificate is different from the currently installed one
-3. **Install**: If newer/different, writes the certificate files to `/etc/nginx/ssl/`
-4. **Test**: Runs `nginx -t` to verify configuration is still valid
-5. **Restart**: Restarts nginx to apply the new certificate
+1. **Fetch**: Connects to Combell API and retrieves the SSL certificate list for your account
+2. **Match**: Finds the certificate matching the specified domain name
+3. **Compare**: Checks if the certificate is different from the currently installed one
+4. **Download**: Downloads the certificate as a PFX file using your PFX_PASSWORD
+5. **Convert**: Uses OpenSSL to extract the certificate, private key, and chain from the PFX file
+6. **Install**: Writes the certificate files to `/etc/nginx/ssl/`
+7. **Test**: Runs `nginx -t` to verify configuration is still valid
+8. **Restart**: Restarts nginx to apply the new certificate
 
 ## Troubleshooting
 
@@ -219,15 +221,38 @@ sudo node dist/index.js de-essen.be
 
 ## Development
 
+### Testing on macOS
+
+For testing on macOS (where nginx might not be installed or you don't have root access):
+
+```bash
+# Use test mode for dry-run (no files written)
+npm start -- --test de-essen.be
+
+# Or test actual download to a temporary directory
+NGINX_CERT_DIR=/tmp/nginx-test npm start de-essen.be
+```
+
+This will:
+- Download the actual PFX certificate from Combell
+- Convert it using OpenSSL
+- Save files to `/tmp/nginx-test` instead of `/etc/nginx/ssl`
+- Skip nginx restart operations
+
+### Development Commands
+
 ```bash
 # Install dependencies
 npm install
 
-# Run in development mode
-npm run dev de-essen.be
+# Run in development mode (with test flag)
+npm run dev -- --test de-essen.be
 
-# Build
+# Build TypeScript
 npm run build
+
+# Run without test mode
+npm start de-essen.be
 ```
 
 ## Security Notes

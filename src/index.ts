@@ -34,6 +34,7 @@ interface CombellApiResponse {
 class SSLManager {
   private apiKey: string;
   private apiSecret: string;
+  private pfxPassword: string;
   private apiBaseUrl = 'https://api.combell.com/v2';
   private sitesEnabledDir = '/etc/nginx/sites-enabled';
   private certDir = '/etc/nginx/ssl';
@@ -43,9 +44,14 @@ class SSLManager {
     this.testMode = testMode;
     this.apiKey = process.env.COMBELL_API_KEY || '';
     this.apiSecret = process.env.COMBELL_API_SECRET || '';
+    this.pfxPassword = process.env.PFX_PASSWORD || '';
 
     if (!this.apiKey || !this.apiSecret) {
       throw new Error('COMBELL_API_KEY and COMBELL_API_SECRET must be set in environment variables or .env file');
+    }
+
+    if (!this.pfxPassword && !testMode) {
+      console.warn('⚠️  WARNING: PFX_PASSWORD not set. Certificate download will be disabled.');
     }
 
     // Allow overriding directories via env vars
@@ -68,8 +74,27 @@ class SSLManager {
     // Lowercase method
     const lowerMethod = method.toLowerCase();
     
-    // Lowercase the path first
-    const lowerPath = path.toLowerCase();
+    // Split path and query string
+    const [basePath, queryString] = path.split('?');
+    
+    // Lowercase the base path only
+    const lowerBasePath = basePath.toLowerCase();
+    
+    // For query string, lowercase only the keys, not the values (important for passwords!)
+    let lowerQueryString = '';
+    if (queryString) {
+      const params = new URLSearchParams(queryString);
+      const lowerParams = new URLSearchParams();
+      
+      params.forEach((value, key) => {
+        // Lowercase the key, keep the value as-is
+        lowerParams.append(key.toLowerCase(), value);
+      });
+      
+      lowerQueryString = '?' + lowerParams.toString();
+    }
+    
+    const lowerPath = lowerBasePath + lowerQueryString;
     
     // URL encode the ENTIRE path (including slashes) and uppercase hex codes
     // encodeURIComponent encodes everything except: A-Z a-z 0-9 - _ . ! ~ * ' ( )
@@ -140,6 +165,7 @@ class SSLManager {
       const listResponse = await axios.get<CombellSSLCertificate[]>(listUrl, { headers: listHeaders });
       
       console.log(`Found ${listResponse.data.length} SSL certificate(s)`);
+      console.log(listResponse.data.map(c => `  - ${c.common_name} (expires: ${c.expires_after})`).join('\n'));
       
       // Find certificate matching the domain
       const cert = listResponse.data.find(c => 
@@ -220,10 +246,118 @@ class SSLManager {
   }
 
   /**
-   * Install certificate files
-   * NOTE: Combell API only provides PFX downloads which require a password
+   * Download PFX certificate from Combell API
    */
-  private installCertificate(siteName: string, cert: CombellSSLCertificateDetail): void {
+  private async downloadPfxCertificate(sha1Fingerprint: string): Promise<Buffer> {
+    const downloadPath = `/sslcertificates/${sha1Fingerprint.toLowerCase()}/download`;
+    const queryString = `file_format=pfx&password=${encodeURIComponent(this.pfxPassword)}`;
+    const fullPath = `${downloadPath}?${queryString}`;
+    
+    const downloadUrl = `${this.apiBaseUrl}${fullPath}`;
+    const hmacPath = `/v2${fullPath}`;
+    
+    const headers = {
+      ...this.getAuthHeader('GET', hmacPath),
+      'Accept': 'application/x-pkcs12'
+    };
+
+    console.log('Downloading PFX certificate...');
+    
+    const response = await axios.get(downloadUrl, {
+      headers,
+      responseType: 'arraybuffer'
+    });
+
+    return Buffer.from(response.data);
+  }
+
+  /**
+   * Convert PFX to separate certificate and private key files using OpenSSL
+   */
+  private convertPfxToPem(pfxBuffer: Buffer, siteName: string): void {
+    const paths = this.getCertPaths(siteName);
+    const tempPfxPath = path.join(this.certDir, `${siteName}.temp.pfx`);
+
+    try {
+      // Create cert directory if it doesn't exist
+      if (!fs.existsSync(this.certDir)) {
+        console.log(`Creating certificate directory: ${this.certDir}`);
+        try {
+          fs.mkdirSync(this.certDir, { recursive: true, mode: 0o755 });
+        } catch (mkdirError: any) {
+          if (mkdirError.code === 'EACCES') {
+            throw new Error(`Permission denied creating directory ${this.certDir}. Run with sudo or set CERT_DIR to a writable directory.`);
+          }
+          throw mkdirError;
+        }
+      }
+
+      console.log(`Downloaded ${pfxBuffer.length} bytes`);
+
+      // Write PFX to temporary file
+      fs.writeFileSync(tempPfxPath, pfxBuffer, { mode: 0o600 });
+
+      console.log('Converting PFX to PEM format...');
+
+      // Extract certificate (without private key)
+      execSync(
+        `openssl pkcs12 -in "${tempPfxPath}" -clcerts -nokeys -out "${paths.certFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
+        { stdio: 'pipe' }
+      );
+      fs.chmodSync(paths.certFile, 0o644);
+      console.log(`  ✓ Certificate: ${paths.certFile}`);
+
+      // Extract private key
+      execSync(
+        `openssl pkcs12 -in "${tempPfxPath}" -nocerts -nodes -out "${paths.keyFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
+        { stdio: 'pipe' }
+      );
+      fs.chmodSync(paths.keyFile, 0o600);
+      console.log(`  ✓ Private key: ${paths.keyFile}`);
+
+      // Extract CA certificate chain
+      try {
+        execSync(
+          `openssl pkcs12 -in "${tempPfxPath}" -cacerts -nokeys -out "${paths.chainFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
+          { stdio: 'pipe' }
+        );
+        
+        // Check if chain file has content
+        const chainContent = fs.readFileSync(paths.chainFile, 'utf8');
+        if (chainContent.trim().length > 0) {
+          fs.chmodSync(paths.chainFile, 0o644);
+          console.log(`  ✓ Chain: ${paths.chainFile}`);
+
+          // Create fullchain file (certificate + chain)
+          const certContent = fs.readFileSync(paths.certFile, 'utf8');
+          const fullChain = certContent + '\n' + chainContent;
+          fs.writeFileSync(paths.fullChainFile, fullChain, { mode: 0o644 });
+          console.log(`  ✓ Full chain: ${paths.fullChainFile}`);
+        } else {
+          // No chain in PFX, remove empty file
+          fs.unlinkSync(paths.chainFile);
+          // Copy cert as fullchain
+          fs.copyFileSync(paths.certFile, paths.fullChainFile);
+          console.log(`  ℹ No certificate chain found, using certificate only`);
+        }
+      } catch (error) {
+        // If chain extraction fails, just use the certificate
+        fs.copyFileSync(paths.certFile, paths.fullChainFile);
+        console.log(`  ℹ Certificate chain extraction failed, using certificate only`);
+      }
+
+    } finally {
+      // Clean up temporary PFX file
+      if (fs.existsSync(tempPfxPath)) {
+        fs.unlinkSync(tempPfxPath);
+      }
+    }
+  }
+
+  /**
+   * Install certificate files
+   */
+  private async installCertificate(siteName: string, cert: CombellSSLCertificateDetail): Promise<void> {
     const paths = this.getCertPaths(siteName);
 
     if (this.testMode) {
@@ -241,25 +375,34 @@ class SSLManager {
         });
       }
       
-      console.log(`\n⚠️  LIMITATION:`);
-      console.log(`  The Combell API only provides SSL certificates as PFX (PKCS#12) files`);
-      console.log(`  which require a password to decrypt. To download and install:`);
-      console.log(``);
-      console.log(`  1. Manually download from: https://api.combell.com/v2/sslcertificates/${cert.sha1_fingerprint}/download`);
-      console.log(`  2. Provide a password and file_format=pfx as query parameters`);
-      console.log(`  3. Convert PFX to separate .crt and .key files using openssl:`);
-      console.log(`     openssl pkcs12 -in cert.pfx -out cert.crt -clcerts -nokeys`);
-      console.log(`     openssl pkcs12 -in cert.pfx -out cert.key -nocerts -nodes`);
-      
       console.log(`\n📂 Would install to:`);
       console.log(`  • Certificate: ${paths.certFile}`);
       console.log(`  • Private key: ${paths.keyFile}`);
       console.log(`  • Chain: ${paths.chainFile}`);
       console.log(`  • Full chain: ${paths.fullChainFile}`);
+
+      if (!this.pfxPassword) {
+        console.log(`\n⚠️  PFX_PASSWORD not set - certificate download would be skipped`);
+      } else {
+        console.log(`\n✓ PFX_PASSWORD is set - certificate download would proceed`);
+      }
       return;
     }
 
-    throw new Error('Certificate installation not yet implemented.\n\nThe Combell API requires a password to download PFX certificates.\nPlease add PFX_PASSWORD to your .env file or download certificates manually from the Combell control panel.');
+    // Check if password is set
+    if (!this.pfxPassword) {
+      throw new Error('PFX_PASSWORD must be set in .env file to download certificates.\n\nAdd to your .env file:\nPFX_PASSWORD=your_secure_password');
+    }
+
+    // Download PFX certificate
+    const pfxBuffer = await this.downloadPfxCertificate(cert.sha1_fingerprint);
+    console.log(`Downloaded ${pfxBuffer.length} bytes`);
+
+    // Convert PFX to PEM format
+    this.convertPfxToPem(pfxBuffer, siteName);
+
+    console.log(`\nCertificate installed successfully!`);
+    console.log(`Valid until: ${cert.expires_after}`);
   }
 
   /**
@@ -324,7 +467,7 @@ class SSLManager {
     }
 
     // Install certificate
-    this.installCertificate(siteName, cert);
+    await this.installCertificate(siteName, cert);
 
     if (this.testMode) {
       console.log('\n🧪 TEST MODE - Skipping nginx operations');
