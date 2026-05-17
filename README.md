@@ -135,7 +135,7 @@ getssl rooigemhuisartsenpraktijk.be rooigem
 
 This will:
 - Look up the certificate for `rooigemhuisartsenpraktijk.be` in Combell
-- Save the files as `rooigem.crt`, `rooigem.key`, `rooigem.chain.crt`, `rooigem.fullchain.crt`
+- Save the files as `rooigem.cert`, `rooigem.key`, `rooigem.ca`, `rooigem.full.cert`
 
 ### Running from Crontab
 
@@ -177,15 +177,16 @@ To automatically check and update SSL certificates daily:
 - `PFX_PASSWORD` (required for production): Password used to encrypt/decrypt PFX certificate files. Not required in test mode.
 - `NGINX_SITES_ENABLED_DIR` (optional): Override nginx sites-enabled directory (default: `/etc/nginx/sites-enabled`)
 - `NGINX_CERT_DIR` (optional): Override certificate storage directory (default: `/etc/nginx/ssl`)
+  - Common alternative: `/etc/nginx/certs`
 
 ### Certificate Files
 
-The tool creates the following files in `/etc/nginx/ssl/`:
+The tool creates the following files (default: `/etc/nginx/ssl/`, configurable via `NGINX_CERT_DIR`):
 
-- `{sitename}.crt` - The SSL certificate
+- `{sitename}.cert` - The SSL certificate
 - `{sitename}.key` - The private key
-- `{sitename}.chain.crt` - The certificate chain
-- `{sitename}.fullchain.crt` - Full chain (certificate + chain)
+- `{sitename}.ca` - The certificate chain (CA certificates)
+- `{sitename}.full.cert` - Full chain (certificate + chain)
 
 ### Nginx Configuration Example
 
@@ -194,8 +195,8 @@ server {
     listen 443 ssl http2;
     server_name de-essen.be www.de-essen.be;
 
-    ssl_certificate /etc/nginx/ssl/de-essen.be.fullchain.crt;
-    ssl_certificate_key /etc/nginx/ssl/de-essen.be.key;
+    ssl_certificate /etc/nginx/certs/essen.full.cert;
+    ssl_certificate_key /etc/nginx/certs/essen.key;
 
     # SSL configuration
     ssl_protocols TLSv1.2 TLSv1.3;

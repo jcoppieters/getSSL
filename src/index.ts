@@ -217,10 +217,10 @@ class SSLManager {
    */
   private getCertPaths(certName: string) {
     return {
-      certFile: path.join(this.certDir, `${certName}.crt`),
+      certFile: path.join(this.certDir, `${certName}.cert`),
       keyFile: path.join(this.certDir, `${certName}.key`),
-      chainFile: path.join(this.certDir, `${certName}.chain.crt`),
-      fullChainFile: path.join(this.certDir, `${certName}.fullchain.crt`)
+      chainFile: path.join(this.certDir, `${certName}.ca`),
+      fullChainFile: path.join(this.certDir, `${certName}.full.cert`)
     };
   }
 
