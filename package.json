@@ -1,0 +1,26 @@
+{
+  "name": "getssl",
+  "version": "1.0.0",
+  "description": "Tool to fetch and install SSL certificates from Combell API",
+  "main": "dist/index.js",
+  "bin": {
+    "getssl": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": ["ssl", "combell", "nginx", "certificate"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0"
+  }
+}
