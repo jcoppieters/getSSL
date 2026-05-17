@@ -19,7 +19,7 @@ interface CombellSSLCertificate {
 }
 
 interface CombellSSLCertificateDetail extends CombellSSLCertificate {
-  subject_alt_names?: Array<{ domain_name: string }>;
+  subject_alt_names?: Array<{ type: string; value: string }>;
 }
 
 interface CombellApiResponse {
@@ -33,7 +33,7 @@ interface CombellApiResponse {
 
 class SSLManager {
   private apiKey: string;
-  private apiSecret: string | Buffer;
+  private apiSecret: string;
   private apiBaseUrl = 'https://api.combell.com/v2';
   private sitesEnabledDir = '/etc/nginx/sites-enabled';
   private certDir = '/etc/nginx/ssl';
@@ -42,17 +42,10 @@ class SSLManager {
   constructor(testMode: boolean = false) {
     this.testMode = testMode;
     this.apiKey = process.env.COMBELL_API_KEY || '';
-    const apiSecretString = process.env.COMBELL_API_SECRET || '';
+    this.apiSecret = process.env.COMBELL_API_SECRET || '';
 
-    if (!this.apiKey || !apiSecretString) {
+    if (!this.apiKey || !this.apiSecret) {
       throw new Error('COMBELL_API_KEY and COMBELL_API_SECRET must be set in environment variables or .env file');
-    }
-
-    // The API secret is a hex string - decode it to bytes for HMAC
-    if (/^[0-9A-Fa-f]+$/.test(apiSecretString) && apiSecretString.length === 64) {
-      this.apiSecret = Buffer.from(apiSecretString, 'hex');
-    } else {
-      this.apiSecret = apiSecretString;
     }
 
     // Allow overriding directories via env vars
@@ -75,27 +68,28 @@ class SSLManager {
     // Lowercase method
     const lowerMethod = method.toLowerCase();
     
-    // URL encode the path: lowercase the path, then encode it, then uppercase the hex codes
-    // For a path like "/v2/sslcertificates", this should just be "/v2/sslcertificates" since no encoding needed
-    let encodedPath = path.toLowerCase();
-    // Only encode if there are special characters
-    if (encodedPath.match(/[^a-z0-9\/._~-]/)) {
-      encodedPath = encodeURIComponent(encodedPath).replace(/%[0-9A-F]{2}/g, (match) => match.toUpperCase());
-    }
+    // Lowercase the path first
+    const lowerPath = path.toLowerCase();
+    
+    // URL encode the ENTIRE path (including slashes) and uppercase hex codes
+    // encodeURIComponent encodes everything except: A-Z a-z 0-9 - _ . ! ~ * ' ( )
+    const encodedPath = encodeURIComponent(lowerPath).replace(/%[0-9a-f]{2}/gi, (match) => match.toUpperCase());
     
     // Hash content if present (MD5, Base64 encoded)
     const contentHash = content ? crypto.createHash('md5').update(content).digest('base64') : '';
     
-    // Concatenate: apikey + method + path + timestamp + nonce + content
+    // Concatenate: apikey + method + encodedPath + timestamp + nonce + content
     const message = `${this.apiKey}${lowerMethod}${encodedPath}${timestamp}${nonce}${contentHash}`;
     
     if (this.testMode) {
       console.log(`\n🔐 HMAC Debug:`);
       console.log(`  Method: ${lowerMethod}`);
-      console.log(`  Path: ${encodedPath}`);
+      console.log(`  Original Path: ${path}`);
+      console.log(`  Lowercased Path: ${lowerPath}`);
+      console.log(`  Encoded Path: ${encodedPath}`);
       console.log(`  Timestamp: ${timestamp}`);
       console.log(`  Nonce: ${nonce}`);
-      console.log(`  Message to sign: ${message}`);
+      console.log(`  Message to sign: ${message.substring(0, 100)}...`);
     }
     
     // Generate HMAC-SHA256 signature using the API secret
@@ -138,7 +132,7 @@ class SSLManager {
         console.log(`\n🔍 Debug Info:`);
         console.log(`  API URL: ${listUrl}`);
         console.log(`  API Key: ${this.apiKey.substring(0, 8)}...`);
-        console.log(`  API Secret: ${Buffer.isBuffer(this.apiSecret) ? '<hex-decoded>' : this.apiSecret.substring(0, 8) + '...'}`);
+        console.log(`  API Secret: ${this.apiSecret.substring(0, 8)}...`);
         console.log(`  Auth Header: ${listHeaders.Authorization.substring(0, 40)}...`);
       }
       
@@ -163,12 +157,17 @@ class SSLManager {
       console.log(`Found certificate for ${cert.common_name}`);
       
       // Get certificate details
-      const detailPath = `/sslcertificates/${cert.sha1_fingerprint}`;
+      // Note: The fingerprint from the API is in uppercase
+      const detailPath = `/sslcertificates/${cert.sha1_fingerprint.toLowerCase()}`;
       const detailUrl = `${this.apiBaseUrl}${detailPath}`;
       const detailHeaders = {
         ...this.getAuthHeader('GET', `/v2${detailPath}`),
         'Content-Type': 'application/json'
       };
+      
+      if (this.testMode) {
+        console.log(`  Detail URL: ${detailUrl}`);
+      }
       
       const detailResponse = await axios.get<CombellSSLCertificateDetail>(detailUrl, { headers: detailHeaders });
       
@@ -238,7 +237,7 @@ class SSLManager {
       if (cert.subject_alt_names && cert.subject_alt_names.length > 0) {
         console.log(`  • Subject Alternative Names:`);
         cert.subject_alt_names.forEach(san => {
-          console.log(`    - ${san.domain_name}`);
+          console.log(`    - ${san.value}`);
         });
       }
       
