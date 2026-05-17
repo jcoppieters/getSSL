@@ -15,29 +15,46 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
 
 - Node.js 18+ and npm
 - Access to Combell API (API key and secret)
+- **IP address whitelisted** in your Combell control panel (required!)
 - nginx installed and configured
 - Sufficient permissions to write to nginx directories and restart nginx (usually requires root/sudo)
 
+## Important Combell API Notes
+
+⚠️ **Authentication**: The Combell API uses HMAC (Hash-based Message Authentication Code), not simple API keys  
+⚠️ **IP Whitelisting**: You **must** whitelist your server's IP address in the Combell control panel under API settings  
+⚠️ **Certificate Format**: The API only provides SSL certificates as PFX (PKCS#12) files that require a password to decrypt
+
+**Current Limitation**: This tool can currently only **list and view** SSL certificate information from the Combell API. To fully automate certificate installation, you would need to:
+1. Add PFX password support
+2. Convert PFX to separate .crt and .key files using OpenSSL
+3. Pull request welcome! 😊
+
 ## Installation
 
-1. Clone or download this repository:
+1. **Whitelist your IP** in Combell control panel:
+   - Log in to your Combell account
+   - Go to API settings
+   - Add your server's IP address to the whitelist
+
+2. Clone or download this repository:
    ```bash
    cd /opt
    git clone <repository-url> getssl
    cd getssl
    ```
 
-2. Install dependencies:
+3. Install dependencies:
    ```bash
    npm install
    ```
 
-3. Build the TypeScript code:
+4. Build the TypeScript code:
    ```bash
    npm run build
    ```
 
-4. Create a `.env` file with your Combell API credentials:
+5. Create a `.env` file with your Combell API credentials:
    ```bash
    cp .env.example .env
    nano .env
@@ -49,7 +66,7 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
    COMBELL_API_SECRET=your_actual_api_secret
    ```
 
-5. (Optional) Install globally or create a symlink:
+6. (Optional) Install globally or create a symlink:
    ```bash
    npm link
    # or
