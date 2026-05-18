@@ -566,30 +566,7 @@ class SSLManager {
     }
   }
 
-  /**
-   * Restart nginx
-   */
-  private restartNginx(): void {
-    if (this.testMode) {
-      console.log('🧪 TEST MODE - Would restart nginx (systemctl restart nginx)');
-      return;
-    }
 
-    try {
-      console.log('Restarting nginx...');
-      // Try systemctl first (most common on modern Linux)
-      execSync('/bin/systemctl restart nginx 2>/dev/null || /usr/bin/systemctl restart nginx', { stdio: 'inherit', shell: '/bin/bash' });
-      console.log('  ✓ Nginx restarted successfully');
-    } catch (error: any) {
-      // Try alternative restart methods
-      try {
-        execSync('/usr/sbin/service nginx restart || service nginx restart', { stdio: 'inherit', shell: '/bin/bash' });
-        console.log('  ✓ Nginx restarted successfully');
-      } catch (e) {
-        throw new Error('Failed to restart nginx. Please restart manually.');
-      }
-    }
-  }
 
   /**
    * Main process to update SSL certificate
@@ -627,10 +604,14 @@ class SSLManager {
       throw new Error('Nginx configuration test failed. Certificate files may be invalid.');
     }
 
-    // Restart nginx
-    this.restartNginx();
-
-    console.log('\n✓ SSL certificate update completed successfully!\n');
+    console.log('\n✅ SSL certificate update completed successfully!\n');
+    console.log('📋 Next steps:');
+    console.log('  1. Verify certificates: ./checkSSL.sh ' + actualCertName);
+    console.log('  2. Restart nginx to apply changes:');
+    console.log('     sudo systemctl restart nginx');
+    console.log('     or');
+    console.log('     sudo service nginx restart');
+    console.log('');
   }
 }
 
