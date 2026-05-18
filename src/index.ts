@@ -84,6 +84,38 @@ class SSLManager {
   }
 
   /**
+   * Clean PEM file by removing OpenSSL metadata (Bag Attributes, etc.)
+   * Keeps only the PEM blocks (-----BEGIN ... -----END)
+   */
+  private cleanPemFile(filePath: string): void {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n');
+    const cleanedLines: string[] = [];
+    let inPemBlock = false;
+
+    for (const line of lines) {
+      // Start of a PEM block
+      if (line.startsWith('-----BEGIN')) {
+        inPemBlock = true;
+        cleanedLines.push(line);
+      }
+      // End of a PEM block
+      else if (line.startsWith('-----END')) {
+        cleanedLines.push(line);
+        inPemBlock = false;
+      }
+      // Inside a PEM block, keep the line
+      else if (inPemBlock) {
+        cleanedLines.push(line);
+      }
+      // Outside PEM block, skip metadata lines (Bag Attributes, Key Attributes, etc.)
+    }
+
+    // Write cleaned content back
+    fs.writeFileSync(filePath, cleanedLines.join('\n') + '\n');
+  }
+
+  /**
    * Generate HMAC signature for Combell API authentication
    */
   private generateHmacSignature(method: string, path: string, timestamp: number, nonce: string, content: string = ''): string {
@@ -329,6 +361,8 @@ class SSLManager {
         `openssl pkcs12 -in "${tempPfxPath}" -clcerts -nokeys -out "${paths.certFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
         { stdio: 'pipe' }
       );
+      // Clean metadata from certificate file
+      this.cleanPemFile(paths.certFile);
       fs.chmodSync(paths.certFile, 0o644);
       console.log(`  ✓ Certificate: ${paths.certFile}`);
 
@@ -337,6 +371,8 @@ class SSLManager {
         `openssl pkcs12 -in "${tempPfxPath}" -nocerts -nodes -out "${paths.keyFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
         { stdio: 'pipe' }
       );
+      // Clean metadata from key file
+      this.cleanPemFile(paths.keyFile);
       fs.chmodSync(paths.keyFile, 0o600);
       console.log(`  ✓ Private key: ${paths.keyFile}`);
 
@@ -346,6 +382,9 @@ class SSLManager {
           `openssl pkcs12 -in "${tempPfxPath}" -cacerts -nokeys -out "${paths.chainFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
           { stdio: 'pipe' }
         );
+        
+        // Clean metadata from chain file
+        this.cleanPemFile(paths.chainFile);
         
         // Check if chain file has content
         const chainContent = fs.readFileSync(paths.chainFile, 'utf8');
