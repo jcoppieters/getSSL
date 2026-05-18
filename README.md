@@ -52,7 +52,7 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
 5. Create a `.env` file with your Combell API credentials:
    ```bash
    cp .env.example .env
-   nano .env
+   vi .env
    ```
 
    Add your credentials:

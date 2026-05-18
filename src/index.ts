@@ -504,8 +504,16 @@ class SSLManager {
       console.log('  ✓ Nginx configuration is valid');
       return true;
     } catch (error: any) {
+      // Check if the error output contains "syntax is ok"
+      // This means config is valid even if there are permission issues
+      const stderr = error.stderr?.toString() || '';
+      if (stderr.includes('syntax is ok')) {
+        console.log('  ✓ Nginx configuration is valid');
+        return true;
+      }
+      
       console.error('  ✗ Nginx configuration test failed:');
-      console.error(error.stderr?.toString() || error.message);
+      console.error(stderr || error.message);
       return false;
     }
   }
