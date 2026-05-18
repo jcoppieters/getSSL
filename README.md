@@ -34,9 +34,9 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
 
 2. Clone or download this repository:
    ```bash
-   cd /opt
-   git clone <repository-url> getssl
-   cd getssl
+   cd /etc/nodejs
+   git clone <repository-url> getSSL
+   cd getSSL
    ```
 
 3. Install dependencies:
@@ -68,8 +68,8 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
    ```bash
    npm link
    # or
-   ln -s /opt/getssl/dist/index.js /usr/local/bin/getssl
-   chmod +x /opt/getssl/dist/index.js
+   ln -s /opt/getSSL/dist/index.js /usr/local/bin/getSSL
+   chmod +x /opt/getSSL/dist/index.js
    ```
 
 ## Usage
@@ -86,7 +86,7 @@ npm start -- --test de-essen.be
 npm run dev -- --test de-essen.be
 
 # If installed globally
-getssl --test de-essen.be
+getSSL --test de-essen.be
 ```
 
 Test mode will:
@@ -111,18 +111,18 @@ npm start rooigemhuisartsenpraktijk.be rooigem
 npm start -- --test de-essen.be
 
 # If installed globally or symlinked
-getssl de-essen.be
+getSSL de-essen.be
 
 # With custom certificate name
-getssl rooigemhuisartsenpraktijk.be rooigem
+getSSL rooigemhuisartsenpraktijk.be rooigem
 
 # Test mode
-getssl --test de-essen.be
+getSSL --test de-essen.be
 
 # With sudo (required for nginx operations in production)
 sudo -E npm start de-essen.be
 # or
-sudo getssl rooigemhuisartsenpraktijk.be rooigem
+sudo getSSL rooigemhuisartsenpraktijk.be rooigem
 ```
 
 **Custom Certificate Names:**
@@ -130,7 +130,7 @@ sudo getssl rooigemhuisartsenpraktijk.be rooigem
 If your nginx configuration uses shorter certificate names (e.g., `rooigem.crt` instead of `rooigemhuisartsenpraktijk.be.crt`), you can specify the certificate file base name as a second parameter:
 
 ```bash
-getssl rooigemhuisartsenpraktijk.be rooigem
+getSSL rooigemhuisartsenpraktijk.be rooigem
 ```
 
 This will:
@@ -149,23 +149,23 @@ To automatically check and update SSL certificates daily:
 2. Add a cron job (example: run daily at 3:00 AM):
    ```cron
    # Check SSL certificate for de-essen.be daily at 3:00 AM
-   0 3 * * * cd /opt/getssl && /usr/bin/node dist/index.js de-essen.be >> /var/log/getssl.log 2>&1
+   0 3 * * * cd /opt/getSSL && /usr/bin/node dist/index.js de-essen.be >> /var/log/getSSL.log 2>&1
    ```
 
    Or if you have multiple sites:
    ```cron
    # Check SSL certificates daily at 3:00 AM
-   0 3 * * * cd /opt/getssl && /usr/bin/node dist/index.js de-essen.be >> /var/log/getssl-de-essen.log 2>&1
-   0 3 * * * cd /opt/getssl && /usr/bin/node dist/index.js rooigemhuisartsenpraktijk.be rooigem >> /var/log/getssl-rooigem.log 2>&1
-   0 3 * * * cd /opt/getssl && /usr/bin/node dist/index.js example.com >> /var/log/getssl-example.log 2>&1
+   0 3 * * * cd /opt/getSSL && /usr/bin/node dist/index.js de-essen.be >> /var/log/getSSL-de-essen.log 2>&1
+   0 3 * * * cd /opt/getSSL && /usr/bin/node dist/index.js rooigemhuisartsenpraktijk.be rooigem >> /var/log/getSSL-rooigem.log 2>&1
+   0 3 * * * cd /opt/getSSL && /usr/bin/node dist/index.js example.com >> /var/log/getSSL-example.log 2>&1
    ```
 
    **Note:** The second parameter (e.g., `rooigem`) is the base name for certificate files if your nginx config uses shorter names than the full domain.
 
 3. Make sure the `.env` file is readable by root:
    ```bash
-   sudo chmod 600 /opt/getssl/.env
-   sudo chown root:root /opt/getssl/.env
+   sudo chmod 600 /opt/getSSL/.env
+   sudo chown root:root /opt/getSSL/.env
    ```
 
 ## Configuration
@@ -176,12 +176,12 @@ To automatically check and update SSL certificates daily:
 - `COMBELL_API_SECRET` (required): Your Combell API secret
 - `PFX_PASSWORD` (required for production): Password used to encrypt/decrypt PFX certificate files. Not required in test mode.
 - `NGINX_SITES_ENABLED_DIR` (optional): Override nginx sites-enabled directory (default: `/etc/nginx/sites-enabled`)
-- `NGINX_CERT_DIR` (optional): Override certificate storage directory (default: `/etc/nginx/ssl`)
-  - Common alternative: `/etc/nginx/certs`
+- `NGINX_CERT_DIR` (optional): Override certificate storage directory (default: `/etc/nginx/certs`)
+  - Common alternative: `/etc/nginx/ssl`
 
 ### Certificate Files
 
-The tool creates the following files (default: `/etc/nginx/ssl/`, configurable via `NGINX_CERT_DIR`):
+The tool creates the following files (default: `/etc/nginx/certs/`, configurable via `NGINX_CERT_DIR`):
 
 - `{sitename}.cert` - The SSL certificate
 - `{sitename}.key` - The private key
@@ -214,7 +214,7 @@ server {
 3. **Compare**: Checks if the certificate is different from the currently installed one
 4. **Download**: Downloads the certificate as a PFX file using your PFX_PASSWORD
 5. **Convert**: Uses OpenSSL to extract the certificate, private key, and chain from the PFX file
-6. **Install**: Writes the certificate files to `/etc/nginx/ssl/`
+6. **Install**: Writes the certificate files to `/etc/nginx/certs/`
 7. **Test**: Runs `nginx -t` to verify configuration is still valid
 8. **Restart**: Restarts nginx to apply the new certificate
 
@@ -258,7 +258,7 @@ NGINX_CERT_DIR=/tmp/nginx-test npm start de-essen.be
 This will:
 - Download the actual PFX certificate from Combell
 - Convert it using OpenSSL
-- Save files to `/tmp/nginx-test` instead of `/etc/nginx/ssl`
+- Save files to `/tmp/nginx-test` instead of `/etc/nginx/certs`
 - Skip nginx restart operations
 
 ### Development Commands

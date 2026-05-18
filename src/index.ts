@@ -37,7 +37,7 @@ class SSLManager {
   private pfxPassword: string;
   private apiBaseUrl = 'https://api.combell.com/v2';
   private sitesEnabledDir = '/etc/nginx/sites-enabled';
-  private certDir = '/etc/nginx/ssl';
+  private certDir = '/etc/nginx/certs';
   private testMode: boolean;
 
   constructor(testMode: boolean = false) {
