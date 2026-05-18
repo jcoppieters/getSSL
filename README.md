@@ -74,6 +74,19 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
 
 ## Usage
 
+### Command Syntax
+
+```bash
+getSSL [--test] <domain-name> [certificate-name]
+```
+
+**Parameters:**
+- `--test` (optional): Run in test mode without making changes
+- `<domain-name>` (required): The domain name as registered in Combell (e.g., `de-essen.be`)
+- `[certificate-name]` (optional): Custom name for certificate files (e.g., `essen`)
+  - If omitted, uses the domain name
+  - If provided, creates shorter file names (e.g., `essen.cert` instead of `de-essen.be.cert`)
+
 ### Test Mode (Dry Run)
 
 Test the tool without making any changes - perfect for development and testing on macOS:
@@ -82,11 +95,17 @@ Test the tool without making any changes - perfect for development and testing o
 # Using npm
 npm start -- --test de-essen.be
 
+# With custom certificate name
+npm start -- --test de-essen.be essen
+
 # Using npm run dev
 npm run dev -- --test de-essen.be
 
 # If installed globally
 getSSL --test de-essen.be
+
+# With custom certificate name
+getSSL --test rooigemhuisartsenpraktijk.be rooigem
 ```
 
 Test mode will:
@@ -183,10 +202,23 @@ To automatically check and update SSL certificates daily:
 
 The tool creates the following files (default: `/etc/nginx/certs/`, configurable via `NGINX_CERT_DIR`):
 
-- `{sitename}.cert` - The SSL certificate
-- `{sitename}.key` - The private key
-- `{sitename}.ca` - The certificate chain (CA certificates)
-- `{sitename}.full.cert` - Full chain (certificate + chain)
+- `{certname}.cert` - The SSL certificate
+- `{certname}.key` - The private key
+- `{certname}.ca` - The certificate chain (CA certificates)
+- `{certname}.full.cert` - Full chain (certificate + chain)
+
+Where `{certname}` is:
+- The domain name (e.g., `de-essen.be`) if no custom name is specified
+- The custom certificate name (e.g., `essen`) if provided as the second parameter
+
+**Examples:**
+```bash
+# Creates: de-essen.be.cert, de-essen.be.key, de-essen.be.ca, de-essen.be.full.cert
+getSSL de-essen.be
+
+# Creates: essen.cert, essen.key, essen.ca, essen.full.cert
+getSSL de-essen.be essen
+```
 
 ### Nginx Configuration Example
 

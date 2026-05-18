@@ -68,6 +68,22 @@ class SSLManager {
   }
 
   /**
+   * Find nginx binary path
+   */
+  private findNginxBinary(): string {
+    const possiblePaths = ['/usr/sbin/nginx', '/usr/bin/nginx', '/usr/local/sbin/nginx', '/usr/local/bin/nginx'];
+    
+    for (const nginxPath of possiblePaths) {
+      if (fs.existsSync(nginxPath)) {
+        return nginxPath;
+      }
+    }
+    
+    // Fallback to just 'nginx' and hope it's in PATH
+    return 'nginx';
+  }
+
+  /**
    * Generate HMAC signature for Combell API authentication
    */
   private generateHmacSignature(method: string, path: string, timestamp: number, nonce: string, content: string = ''): string {
@@ -483,7 +499,8 @@ class SSLManager {
 
     try {
       console.log('Testing nginx configuration...');
-      execSync('nginx -t', { stdio: 'pipe' });
+      const nginxBinary = this.findNginxBinary();
+      execSync(`${nginxBinary} -t`, { stdio: 'pipe' });
       console.log('  ✓ Nginx configuration is valid');
       return true;
     } catch (error: any) {
@@ -504,12 +521,13 @@ class SSLManager {
 
     try {
       console.log('Restarting nginx...');
-      execSync('systemctl restart nginx', { stdio: 'inherit' });
+      // Try systemctl first (most common on modern Linux)
+      execSync('/bin/systemctl restart nginx 2>/dev/null || /usr/bin/systemctl restart nginx', { stdio: 'inherit', shell: '/bin/bash' });
       console.log('  ✓ Nginx restarted successfully');
     } catch (error: any) {
       // Try alternative restart methods
       try {
-        execSync('service nginx restart', { stdio: 'inherit' });
+        execSync('/usr/sbin/service nginx restart || service nginx restart', { stdio: 'inherit', shell: '/bin/bash' });
         console.log('  ✓ Nginx restarted successfully');
       } catch (e) {
         throw new Error('Failed to restart nginx. Please restart manually.');
