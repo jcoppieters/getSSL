@@ -250,25 +250,109 @@ server {
 
 ## Verifying Certificates
 
-After installing certificates, use the included verification script:
+After installing certificates, use the included `checkSSL.sh` script to verify everything is correct before restarting nginx.
+
+### Usage
 
 ```bash
-# Check all certificates
+# Check all certificates in /etc/nginx/certs
 ./checkSSL.sh
 
 # Check a specific certificate
 ./checkSSL.sh essen
+
+# Use custom certificate directory
+NGINX_CERT_DIR=/custom/path ./checkSSL.sh
 ```
 
-The script will verify:
-- Certificate and private key are valid PEM format
-- Certificate and private key match (modulus comparison)
-- Certificate expiration date
-- Certificate chain validity
-- Certificate subject and Subject Alternative Names (SANs)
-- If a certificate fails validation, checks if it's still in use in `/etc/nginx/sites-enabled/` configs
+### What It Checks
 
-If all checks pass, the script will display the command to restart nginx safely.
+The script performs comprehensive validation:
+
+1. **File Existence**: Verifies `.key` and `.full.cert` files exist
+2. **Format Validation**: Checks files are valid PEM format using OpenSSL
+3. **Key/Certificate Match**: Compares modulus to ensure private key matches certificate
+4. **Expiration Date**: Shows expiry date with color-coded warnings:
+   - 🟢 **Green**: More than 30 days until expiry
+   - 🟡 **Yellow**: Less than 30 days (renewal recommended)
+   - 🔴 **Red**: Certificate expired
+5. **Certificate Details**: Displays subject and Subject Alternative Names (SANs)
+6. **Usage Check**: If validation fails, searches `/etc/nginx/sites-enabled/` to see if the certificate is actively in use
+
+### Example Output
+
+**Successful check:**
+```bash
+$ ./checkSSL.sh essen
+
+=== Checking essen ===
+✓ Certificate and private key match
+✓ Certificate valid until: Dec  1 23:59:59 2026 GMT (562 days)
+  Subject: CN=de-essen.be
+  SANs: DNS:www.de-essen.be,DNS:de-essen.be
+
+================================
+Summary: 1 certificate(s) checked
+Passed: 1
+
+All certificates are valid!
+
+You can now safely restart nginx:
+  sudo systemctl restart nginx
+or
+  sudo service nginx restart
+```
+
+**Failed check with usage warning:**
+```bash
+$ ./checkSSL.sh old-cert
+
+=== Checking old-cert ===
+✓ Certificate and private key match
+✗ Certificate EXPIRED on: Jan 15 23:59:59 2025 GMT
+⚠️  WARNING: This certificate is currently in use!
+   Found in nginx config files:
+   - /etc/nginx/sites-enabled/old-site.conf
+
+================================
+Summary: 1 certificate(s) checked
+Passed: 0
+Failed: 1
+```
+
+### Configuration
+
+The script respects environment variables:
+
+- `NGINX_CERT_DIR` - Certificate directory (default: `/etc/nginx/certs`)
+- `NGINX_SITES_ENABLED_DIR` - Nginx sites directory (default: `/etc/nginx/sites-enabled`)
+
+### Exit Codes
+
+- `0` - All checks passed
+- `1` - One or more checks failed
+
+This makes it safe to use in scripts:
+
+```bash
+if ./checkSSL.sh essen; then
+    sudo systemctl restart nginx
+else
+    echo "Certificate validation failed!"
+    exit 1
+fi
+```
+
+### Tips
+
+- Run `checkSSL.sh` after every certificate update before restarting nginx
+- Check all certificates periodically: `./checkSSL.sh` (no arguments)
+- Use in cron jobs to monitor certificate health:
+  ```bash
+  # Daily certificate check at 2 AM
+  0 2 * * * cd /opt/getSSL && ./checkSSL.sh >> /var/log/cert-check.log 2>&1
+  ```
+- If a certificate fails but isn't in use, you can safely ignore it until needed
 
 ## Troubleshooting
 
