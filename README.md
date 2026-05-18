@@ -268,6 +268,7 @@ The script will verify:
 - Certificate expiration date
 - Certificate chain validity
 - Certificate subject and Subject Alternative Names (SANs)
+- If a certificate fails validation, checks if it's still in use in `/etc/nginx/sites-enabled/` configs
 
 If all checks pass, the script will display the command to restart nginx safely.
 
