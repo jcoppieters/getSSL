@@ -23,9 +23,7 @@ check_certificate_usage() {
     
     # Search for references to this certificate in nginx configs
     local cert_patterns=(
-        "$cert_name.cert"
         "$cert_name.key"
-        "$cert_name.ca"
         "$cert_name.full.cert"
     )
     
@@ -51,17 +49,15 @@ check_certificate_usage() {
 
 check_certificate() {
     local cert_name=$1
-    local cert_file="$CERT_DIR/$cert_name.cert"
     local key_file="$CERT_DIR/$cert_name.key"
-    local ca_file="$CERT_DIR/$cert_name.ca"
     local full_file="$CERT_DIR/$cert_name.full.cert"
     local check_failed=0
     
     echo "=== Checking $cert_name ==="
     
     # Check if files exist
-    if [ ! -f "$cert_file" ]; then
-        echo -e "${RED}✗ Certificate file not found: $cert_file${NC}"
+    if [ ! -f "$full_file" ]; then
+        echo -e "${RED}✗ Certificate file not found: $full_file${NC}"
         check_failed=1
     fi
     
@@ -73,7 +69,7 @@ check_certificate() {
     # Only continue checks if files exist
     if [ $check_failed -eq 0 ]; then
         # Verify certificate is valid
-        if ! openssl x509 -in "$cert_file" -noout 2>/dev/null; then
+        if ! openssl x509 -in "$full_file" -noout 2>/dev/null; then
             echo -e "${RED}✗ Invalid certificate format${NC}"
             check_failed=1
         fi
@@ -86,7 +82,7 @@ check_certificate() {
         
         # Check if certificate and key match
         if [ $check_failed -eq 0 ]; then
-            cert_md5=$(openssl x509 -noout -modulus -in "$cert_file" 2>/dev/null | openssl md5)
+            cert_md5=$(openssl x509 -noout -modulus -in "$full_file" 2>/dev/null | openssl md5)
             key_md5=$(openssl rsa -noout -modulus -in "$key_file" 2>/dev/null | openssl md5)
             
             if [ "$cert_md5" = "$key_md5" ]; then
@@ -99,7 +95,7 @@ check_certificate() {
         
         # Check certificate expiry
         if [ $check_failed -eq 0 ]; then
-            expiry=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | cut -d= -f2)
+            expiry=$(openssl x509 -in "$full_file" -noout -enddate 2>/dev/null | cut -d= -f2)
             expiry_timestamp=$(date -d "$expiry" +%s 2>/dev/null || date -j -f "%b %d %H:%M:%S %Y %Z" "$expiry" +%s 2>/dev/null)
             current_timestamp=$(date +%s)
             days_until_expiry=$(( ($expiry_timestamp - $current_timestamp) / 86400 ))
@@ -116,31 +112,12 @@ check_certificate() {
         
         # Show certificate subject and SANs
         if [ $check_failed -eq 0 ]; then
-            subject=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null | sed 's/subject=//')
+            subject=$(openssl x509 -in "$full_file" -noout -subject 2>/dev/null | sed 's/subject=//')
             echo "  Subject: $subject"
             
-            sans=$(openssl x509 -in "$cert_file" -noout -ext subjectAltName 2>/dev/null | grep -v "X509v3 Subject Alternative Name" | tr -d ' ')
+            sans=$(openssl x509 -in "$full_file" -noout -ext subjectAltName 2>/dev/null | grep -v "X509v3 Subject Alternative Name" | tr -d ' ')
             if [ -n "$sans" ]; then
                 echo "  SANs: $sans"
-            fi
-        fi
-        
-        # Verify certificate chain if CA file exists
-        if [ -f "$ca_file" ] && [ $check_failed -eq 0 ]; then
-            if openssl verify -CAfile "$ca_file" "$cert_file" >/dev/null 2>&1; then
-                echo -e "${GREEN}✓ Certificate chain is valid${NC}"
-            else
-                echo -e "${YELLOW}⚠ Certificate chain verification failed (this may be expected for some setups)${NC}"
-            fi
-        fi
-        
-        # Verify full chain file if it exists
-        if [ -f "$full_file" ] && [ $check_failed -eq 0 ]; then
-            if openssl x509 -in "$full_file" -noout 2>/dev/null; then
-                echo -e "${GREEN}✓ Full chain file is valid${NC}"
-            else
-                echo -e "${RED}✗ Full chain file is invalid${NC}"
-                check_failed=1
             fi
         fi
     fi
@@ -173,18 +150,16 @@ else
     passed=0
     failed=0
     
-    # Find all .cert files and extract base names
-    for cert_file in "$CERT_DIR"/*.cert; do
+    # Find all .full.cert files and extract base names
+    for cert_file in "$CERT_DIR"/*.full.cert; do
         if [ -f "$cert_file" ]; then
-            cert_name=$(basename "$cert_file" .cert)
-            # Skip full.cert files
-            if [[ "$cert_name" != *.full ]]; then
-                total=$((total + 1))
-                if check_certificate "$cert_name"; then
-                    passed=$((passed + 1))
-                else
-                    failed=$((failed + 1))
-                fi
+            # Extract base name by removing .full.cert extension
+            cert_name=$(basename "$cert_file" .full.cert)
+            total=$((total + 1))
+            if check_certificate "$cert_name"; then
+                passed=$((passed + 1))
+            else
+                failed=$((failed + 1))
             fi
         fi
     done

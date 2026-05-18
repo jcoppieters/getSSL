@@ -202,10 +202,8 @@ To automatically check and update SSL certificates daily:
 
 The tool creates the following files (default: `/etc/nginx/certs/`, configurable via `NGINX_CERT_DIR`):
 
-- `{certname}.cert` - The SSL certificate
 - `{certname}.key` - The private key
-- `{certname}.ca` - The certificate chain (CA certificates)
-- `{certname}.full.cert` - Full chain (certificate + chain)
+- `{certname}.full.cert` - Full certificate chain (certificate + CA chain)
 
 Where `{certname}` is:
 - The domain name (e.g., `de-essen.be`) if no custom name is specified
@@ -213,10 +211,10 @@ Where `{certname}` is:
 
 **Examples:**
 ```bash
-# Creates: de-essen.be.cert, de-essen.be.key, de-essen.be.ca, de-essen.be.full.cert
+# Creates: de-essen.be.key, de-essen.be.full.cert
 getSSL de-essen.be
 
-# Creates: essen.cert, essen.key, essen.ca, essen.full.cert
+# Creates: essen.key, essen.full.cert
 getSSL de-essen.be essen
 ```
 

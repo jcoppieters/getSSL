@@ -274,9 +274,7 @@ class SSLManager {
    */
   private getCertPaths(certName: string) {
     return {
-      certFile: path.join(this.certDir, `${certName}.cert`),
       keyFile: path.join(this.certDir, `${certName}.key`),
-      chainFile: path.join(this.certDir, `${certName}.ca`),
       fullChainFile: path.join(this.certDir, `${certName}.full.cert`)
     };
   }
@@ -356,16 +354,6 @@ class SSLManager {
 
       console.log('Converting PFX to PEM format...');
 
-      // Extract certificate (without private key)
-      execSync(
-        `openssl pkcs12 -in "${tempPfxPath}" -clcerts -nokeys -out "${paths.certFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
-        { stdio: 'pipe' }
-      );
-      // Clean metadata from certificate file
-      this.cleanPemFile(paths.certFile);
-      fs.chmodSync(paths.certFile, 0o644);
-      console.log(`  ✓ Certificate: ${paths.certFile}`);
-
       // Extract private key
       execSync(
         `openssl pkcs12 -in "${tempPfxPath}" -nocerts -nodes -out "${paths.keyFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
@@ -376,39 +364,15 @@ class SSLManager {
       fs.chmodSync(paths.keyFile, 0o600);
       console.log(`  ✓ Private key: ${paths.keyFile}`);
 
-      // Extract CA certificate chain
-      try {
-        execSync(
-          `openssl pkcs12 -in "${tempPfxPath}" -cacerts -nokeys -out "${paths.chainFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
-          { stdio: 'pipe' }
-        );
-        
-        // Clean metadata from chain file
-        this.cleanPemFile(paths.chainFile);
-        
-        // Check if chain file has content
-        const chainContent = fs.readFileSync(paths.chainFile, 'utf8');
-        if (chainContent.trim().length > 0) {
-          fs.chmodSync(paths.chainFile, 0o644);
-          console.log(`  ✓ Chain: ${paths.chainFile}`);
-
-          // Create fullchain file (certificate + chain)
-          const certContent = fs.readFileSync(paths.certFile, 'utf8');
-          const fullChain = certContent + '\n' + chainContent;
-          fs.writeFileSync(paths.fullChainFile, fullChain, { mode: 0o644 });
-          console.log(`  ✓ Full chain: ${paths.fullChainFile}`);
-        } else {
-          // No chain in PFX, remove empty file
-          fs.unlinkSync(paths.chainFile);
-          // Copy cert as fullchain
-          fs.copyFileSync(paths.certFile, paths.fullChainFile);
-          console.log(`  ℹ No certificate chain found, using certificate only`);
-        }
-      } catch (error) {
-        // If chain extraction fails, just use the certificate
-        fs.copyFileSync(paths.certFile, paths.fullChainFile);
-        console.log(`  ℹ Certificate chain extraction failed, using certificate only`);
-      }
+      // Extract full certificate chain (certificate + CA chain)
+      execSync(
+        `openssl pkcs12 -in "${tempPfxPath}" -nokeys -out "${paths.fullChainFile}" -passin pass:"${this.pfxPassword}" -passout pass:`,
+        { stdio: 'pipe' }
+      );
+      // Clean metadata from full chain file
+      this.cleanPemFile(paths.fullChainFile);
+      fs.chmodSync(paths.fullChainFile, 0o644);
+      console.log(`  ✓ Full chain: ${paths.fullChainFile}`);
 
     } finally {
       // Clean up temporary PFX file
@@ -490,9 +454,7 @@ class SSLManager {
       }
       
       console.log(`\n📂 Would install to:`);
-      console.log(`  • Certificate: ${paths.certFile}`);
       console.log(`  • Private key: ${paths.keyFile}`);
-      console.log(`  • Chain: ${paths.chainFile}`);
       console.log(`  • Full chain: ${paths.fullChainFile}`);
 
       if (!this.pfxPassword) {
@@ -586,7 +548,7 @@ class SSLManager {
 
     // Check if update is needed
     const paths = this.getCertPaths(actualCertName);
-    if (!this.shouldUpdateCertificate(paths.certFile, cert.expires_after)) {
+    if (!this.shouldUpdateCertificate(paths.fullChainFile, cert.expires_after)) {
       console.log('\nNo update needed. Exiting.');
       return;
     }
