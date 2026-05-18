@@ -242,13 +242,34 @@ server {
 ## How It Works
 
 1. **Fetch**: Connects to Combell API and retrieves the SSL certificate list for your account
-2. **Match**: Finds the certificate matching the specified domain name
+2. **Match**: Finds the certificate matching the specified domain name (selects newest if multiple exist)
 3. **Compare**: Checks if the certificate is different from the currently installed one
 4. **Download**: Downloads the certificate as a PFX file using your PFX_PASSWORD
 5. **Convert**: Uses OpenSSL to extract the certificate, private key, and chain from the PFX file
 6. **Install**: Writes the certificate files to `/etc/nginx/certs/`
 7. **Test**: Runs `nginx -t` to verify configuration is still valid
-8. **Restart**: Restarts nginx to apply the new certificate
+8. **Output**: Displays instructions to verify and restart nginx manually
+
+## Verifying Certificates
+
+After installing certificates, use the included verification script:
+
+```bash
+# Check all certificates
+./checkSSL.sh
+
+# Check a specific certificate
+./checkSSL.sh essen
+```
+
+The script will verify:
+- Certificate and private key are valid PEM format
+- Certificate and private key match (modulus comparison)
+- Certificate expiration date
+- Certificate chain validity
+- Certificate subject and Subject Alternative Names (SANs)
+
+If all checks pass, the script will display the command to restart nginx safely.
 
 ## Troubleshooting
 
@@ -263,7 +284,18 @@ sudo node dist/index.js de-essen.be
 - Check that your Combell account has API access enabled
 - Ensure the domain name matches exactly what's in your Combell account
 
-### Nginx Won't Restart
+### Nginx Restart Issues
+After installing certificates, restart nginx manually:
+```bash
+# Verify certificates first
+./checkSSL.sh
+
+# Then restart nginx
+sudo systemctl restart nginx
+# or
+sudo service nginx restart
+```
+
 - Check nginx logs: `sudo journalctl -u nginx -n 50`
 - Verify configuration: `sudo nginx -t`
 - Check certificate files exist and have correct permissions
