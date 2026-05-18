@@ -183,20 +183,29 @@ class SSLManager {
       console.log(`Found ${listResponse.data.length} SSL certificate(s)`);
       console.log(listResponse.data.map(c => `  - ${c.common_name} (expires: ${c.expires_after})`).join('\n'));
       
-      // Find certificate matching the domain
-      const cert = listResponse.data.find(c => 
+      // Find all certificates matching the domain
+      const matchingCerts = listResponse.data.filter(c => 
         c.common_name === domainName || 
         c.common_name === `www.${domainName}` ||
         domainName.startsWith(c.common_name.replace('*.', ''))
       );
       
-      if (!cert) {
+      if (matchingCerts.length === 0) {
         throw new Error(`No SSL certificate found for domain: ${domainName}\n\nAvailable certificates:\n${
           listResponse.data.map(c => `  - ${c.common_name} (expires: ${c.expires_after})`).join('\n')
         }`);
       }
       
-      console.log(`Found certificate for ${cert.common_name}`);
+      // If multiple certificates match, select the one with the latest expiry date
+      const cert = matchingCerts.sort((a, b) => 
+        new Date(b.expires_after).getTime() - new Date(a.expires_after).getTime()
+      )[0];
+      
+      if (matchingCerts.length > 1) {
+        console.log(`Found ${matchingCerts.length} certificates for ${domainName}, selecting newest (expires: ${cert.expires_after})`);
+      } else {
+        console.log(`Found certificate for ${cert.common_name}`);
+      }
       
       // Get certificate details
       // Note: The fingerprint from the API is in uppercase
