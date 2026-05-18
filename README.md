@@ -7,8 +7,7 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
 - ✅ Fetches SSL certificates from Combell API
 - ✅ Checks if certificate is newer before installing
 - ✅ Installs certificate, private key, and certificate chain
-- ✅ Tests nginx configuration before restarting
-- ✅ Automatically restarts nginx after successful installation
+- ✅ Includes verification script to validate certificates before deployment
 - ✅ Can be run from crontab for automated certificate renewal
 
 ## Prerequisites
@@ -17,7 +16,7 @@ A TypeScript tool to automatically fetch, install, and manage SSL certificates f
 - Access to Combell API (API key and secret)
 - **IP address whitelisted** in your Combell control panel (required!)
 - nginx installed and configured
-- Sufficient permissions to write to nginx directories and restart nginx (usually requires root/sudo)
+- Sufficient permissions to write to nginx directories (usually requires root/sudo)
 
 ## Important Combell API Notes
 
@@ -367,21 +366,25 @@ sudo node dist/index.js de-essen.be
 - Check that your Combell account has API access enabled
 - Ensure the domain name matches exactly what's in your Combell account
 
-### Nginx Restart Issues
-After installing certificates, restart nginx manually:
-```bash
-# Verify certificates first
-./checkSSL.sh
+### Manual Nginx Restart
+This tool does **not** automatically restart nginx for safety. After installing certificates:
 
-# Then restart nginx
-sudo systemctl restart nginx
-# or
-sudo service nginx restart
-```
+1. Verify certificates first:
+   ```bash
+   ./checkSSL.sh
+   ```
 
-- Check nginx logs: `sudo journalctl -u nginx -n 50`
-- Verify configuration: `sudo nginx -t`
-- Check certificate files exist and have correct permissions
+2. If all checks pass, restart nginx:
+   ```bash
+   sudo systemctl restart nginx
+   # or
+   sudo service nginx restart
+   ```
+
+3. If issues occur:
+   - Check nginx logs: `sudo journalctl -u nginx -n 50`
+   - Verify configuration: `sudo nginx -t`
+   - Check certificate files exist and have correct permissions
 
 ### Certificate Not Found
 - Ensure the domain name is correct
