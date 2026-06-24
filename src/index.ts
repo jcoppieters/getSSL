@@ -219,7 +219,7 @@ class SSLManager {
       const matchingCerts = listResponse.data.filter(c => 
         c.common_name === domainName || 
         c.common_name === `www.${domainName}` ||
-        domainName.startsWith(c.common_name.replace('*.', ''))
+        c.common_name.replace('*.', '').startsWith(`${domainName}.`)
       );
       
       if (matchingCerts.length === 0) {
