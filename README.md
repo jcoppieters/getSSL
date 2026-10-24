@@ -275,7 +275,7 @@ The script performs comprehensive validation:
    - 🟢 **Green**: More than 30 days until expiry
    - 🟡 **Yellow**: Less than 30 days (renewal recommended)
    - 🔴 **Red**: Certificate expired
-5. **Certificate Details**: Displays subject and Subject Alternative Names (SANs)
+5. **Certificate Details**: Displays subject, Subject Alternative Names (SANs), and issuer — including whether the certificate came from Combell or was self-generated via Let's Encrypt
 6. **Usage Check**: If validation fails, searches `/etc/nginx/sites-enabled/` to see if the certificate is actively in use
 
 ### Example Output
@@ -289,6 +289,8 @@ $ ./checkSSL.sh essen
 ✓ Certificate valid until: Dec  1 23:59:59 2026 GMT (562 days)
   Subject: CN=de-essen.be
   SANs: DNS:www.de-essen.be,DNS:de-essen.be
+  Issuer: C=BE, O=Sectigo Limited, CN=Sectigo RSA Domain Validation Secure Server CA
+  Source: Combell
 
 ================================
 Summary: 1 certificate(s) checked

@@ -114,10 +114,18 @@ check_certificate() {
         if [ $check_failed -eq 0 ]; then
             subject=$(openssl x509 -in "$full_file" -noout -subject 2>/dev/null | sed 's/subject=//')
             echo "  Subject: $subject"
-            
+
             sans=$(openssl x509 -in "$full_file" -noout -ext subjectAltName 2>/dev/null | grep -v "X509v3 Subject Alternative Name" | tr -d ' ')
             if [ -n "$sans" ]; then
                 echo "  SANs: $sans"
+            fi
+
+            issuer=$(openssl x509 -in "$full_file" -noout -issuer 2>/dev/null | sed 's/issuer=//')
+            echo "  Issuer: $issuer"
+            if echo "$issuer" | grep -qi "Let's Encrypt\|ISRG"; then
+                echo -e "  Source: ${GREEN}Let's Encrypt (self-generated)${NC}"
+            else
+                echo -e "  Source: ${GREEN}Combell${NC}"
             fi
         fi
     fi
