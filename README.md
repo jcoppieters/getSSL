@@ -251,17 +251,23 @@ server {
 
 After installing certificates, use the included `checkSSL.sh` script to verify everything is correct before restarting nginx.
 
+The script checks **both** sources of certificates on a server:
+- Combell certificates installed by `getSSL` (in `NGINX_CERT_DIR`, as `{name}.key` / `{name}.full.cert`)
+- Self-generated Let's Encrypt certificates from certbot (in `LETSENCRYPT_DIR`, as `{domain}/privkey.pem` / `{domain}/fullchain.pem`)
+
+Each certificate's **Issuer** is shown so you can see at a glance which ones come from Combell and which were self-generated via Let's Encrypt.
+
 ### Usage
 
 ```bash
-# Check all certificates in /etc/nginx/certs
+# Check all certificates (Combell + Let's Encrypt)
 ./checkSSL.sh
 
-# Check a specific certificate
+# Check a specific certificate (by Combell cert name or Let's Encrypt domain)
 ./checkSSL.sh essen
 
-# Use custom certificate directory
-NGINX_CERT_DIR=/custom/path ./checkSSL.sh
+# Use custom directories
+NGINX_CERT_DIR=/custom/path LETSENCRYPT_DIR=/etc/letsencrypt/live ./checkSSL.sh
 ```
 
 ### What It Checks
@@ -325,7 +331,8 @@ Failed: 1
 
 The script respects environment variables:
 
-- `NGINX_CERT_DIR` - Certificate directory (default: `/etc/nginx/certs`)
+- `NGINX_CERT_DIR` - Combell certificate directory (default: `/etc/nginx/certs`)
+- `LETSENCRYPT_DIR` - Let's Encrypt live directory (default: `/etc/letsencrypt/live`)
 - `NGINX_SITES_ENABLED_DIR` - Nginx sites directory (default: `/etc/nginx/sites-enabled`)
 
 ### Exit Codes
