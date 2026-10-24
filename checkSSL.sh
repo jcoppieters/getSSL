@@ -77,16 +77,17 @@ check_certificate() {
             check_failed=1
         fi
 
-        # Verify private key is valid
-        if ! openssl rsa -in "$key_file" -check -noout 2>/dev/null; then
+        # Verify private key is valid (works for RSA, EC, etc.)
+        if ! openssl pkey -in "$key_file" -noout 2>/dev/null; then
             echo -e "${RED}✗ Invalid private key format${NC}"
             check_failed=1
         fi
 
-        # Check if certificate and key match
+        # Check if certificate and key match by comparing public keys
+        # (modulus comparison only works for RSA; pubkey comparison works for RSA and EC)
         if [ $check_failed -eq 0 ]; then
-            cert_md5=$(openssl x509 -noout -modulus -in "$full_file" 2>/dev/null | openssl md5)
-            key_md5=$(openssl rsa -noout -modulus -in "$key_file" 2>/dev/null | openssl md5)
+            cert_md5=$(openssl x509 -in "$full_file" -noout -pubkey 2>/dev/null | openssl md5)
+            key_md5=$(openssl pkey -in "$key_file" -pubout 2>/dev/null | openssl md5)
 
             if [ "$cert_md5" = "$key_md5" ]; then
                 echo -e "${GREEN}✓ Certificate and private key match${NC}"
