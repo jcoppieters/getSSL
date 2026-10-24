@@ -282,7 +282,7 @@ The script performs comprehensive validation:
    - 🟡 **Yellow**: Less than 30 days (renewal recommended)
    - 🔴 **Red**: Certificate expired
 5. **Certificate Details**: Displays subject, Subject Alternative Names (SANs), and issuer — including whether the certificate came from Combell or was self-generated via Let's Encrypt
-6. **Usage Check**: If validation fails, searches `/etc/nginx/sites-enabled/` to see if the certificate is actively in use
+6. **Usage Check**: For every certificate, searches the active configs in `/etc/nginx/sites-enabled/` (ignoring `*.bak*` files) to show exactly which site(s), if any, actually load it — useful for spotting certificates that are expired-but-unused, or still-valid-but-no-longer-referenced (e.g. before cancelling a Combell certificate, confirm nothing still points at it)
 
 ### Example Output
 
@@ -297,6 +297,8 @@ $ ./checkSSL.sh essen
   SANs: DNS:www.de-essen.be,DNS:de-essen.be
   Issuer: C=BE, O=Sectigo Limited, CN=Sectigo RSA Domain Validation Secure Server CA
   Source: Combell
+  Where used:
+    - /etc/nginx/sites-enabled/essen.conf
 
 ================================
 Summary: 1 certificate(s) checked
@@ -310,7 +312,7 @@ or
   sudo service nginx restart
 ```
 
-**Failed check with usage warning:**
+**Failed check, still in use (don't remove this one):**
 ```bash
 $ ./checkSSL.sh old-cert
 
@@ -318,13 +320,26 @@ $ ./checkSSL.sh old-cert
 ✓ Certificate and private key match
 ✗ Certificate EXPIRED on: Jan 15 23:59:59 2025 GMT
 ⚠️  WARNING: This certificate is currently in use!
-   Found in nginx config files:
-   - /etc/nginx/sites-enabled/old-site.conf
+  Where used:
+    - /etc/nginx/sites-enabled/old-site.conf
 
 ================================
 Summary: 1 certificate(s) checked
 Passed: 0
 Failed: 1
+```
+
+**Valid but unused (safe to clean up / safe to cancel at the CA):**
+```bash
+$ ./checkSSL.sh coppieters
+
+=== Checking coppieters ===
+✓ Certificate and private key match
+✓ Certificate valid until: Nov 30 01:16:16 2026 GMT (36 days)
+  Subject: CN=coppieters.be
+  Issuer: C=US, O=Let's Encrypt, CN=YE1
+  Source: Let's Encrypt (self-generated)
+  Where used: (not referenced in any active nginx config)
 ```
 
 ### Configuration

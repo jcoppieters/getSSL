@@ -15,7 +15,14 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-check_certificate_usage() {
+# find_certificate_usage <key_file> <full_file>
+# Prints the (space-separated) list of active nginx config files that
+# reference this certificate, or nothing if none found. Matches on the
+# full file path, not just the basename - Let's Encrypt certs all share
+# the same basenames (privkey.pem/fullchain.pem), so only the full path
+# uniquely identifies which domain's certificate is referenced. Backup
+# config files (containing ".bak") are ignored since they aren't active.
+find_certificate_usage() {
     local key_file=$1
     local full_file=$2
 
@@ -23,30 +30,16 @@ check_certificate_usage() {
         return
     fi
 
-    # Search for references to this certificate in nginx configs
-    local cert_patterns=(
-        "$(basename "$key_file")"
-        "$(basename "$full_file")"
-    )
-
     local found_in=""
-    for pattern in "${cert_patterns[@]}"; do
-        while IFS= read -r line; do
-            local file=$(echo "$line" | cut -d: -f1)
-            if [ -n "$file" ] && [[ ! "$found_in" =~ "$file" ]]; then
+    for pattern in "$key_file" "$full_file"; do
+        while IFS= read -r file; do
+            if [ -n "$file" ] && [[ "$found_in" != *"$file "* ]]; then
                 found_in+="$file "
             fi
-        done < <(grep -r "$pattern" "$SITES_DIR" 2>/dev/null)
+        done < <(grep -rlF -- "$pattern" "$SITES_DIR" 2>/dev/null | grep -v '\.bak')
     done
 
-    if [ -n "$found_in" ]; then
-        echo -e "${YELLOW}⚠️  WARNING: This certificate is currently in use!${NC}"
-        echo -e "${YELLOW}   Found in nginx config files:${NC}"
-        for file in $found_in; do
-            echo -e "${YELLOW}   - $file${NC}"
-        done
-        echo ""
-    fi
+    echo "$found_in"
 }
 
 # check_certificate <label> <key_file> <full_file>
@@ -134,9 +127,18 @@ check_certificate() {
         fi
     fi
 
-    # If any check failed, see if this certificate is in use
-    if [ $check_failed -eq 1 ]; then
-        check_certificate_usage "$key_file" "$full_file"
+    # Show which active nginx configs (if any) actually reference this certificate
+    where_used=$(find_certificate_usage "$key_file" "$full_file")
+    if [ -n "$where_used" ]; then
+        if [ $check_failed -eq 1 ]; then
+            echo -e "${YELLOW}⚠️  WARNING: This certificate is currently in use!${NC}"
+        fi
+        echo "  Where used:"
+        for file in $where_used; do
+            echo "    - $file"
+        done
+    else
+        echo -e "  Where used: ${YELLOW}(not referenced in any active nginx config)${NC}"
     fi
 
     echo ""
@@ -190,6 +192,7 @@ else
         echo ""
 
         for domain_dir in "$LETSENCRYPT_DIR"/*/; do
+            domain_dir="${domain_dir%/}"
             fullchain="$domain_dir/fullchain.pem"
             if [ -f "$fullchain" ]; then
                 domain_name=$(basename "$domain_dir")
