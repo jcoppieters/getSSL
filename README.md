@@ -260,15 +260,53 @@ Each certificate's **Issuer** is shown so you can see at a glance which ones com
 ### Usage
 
 ```bash
-# Check all certificates (Combell + Let's Encrypt)
+# Check all certificate FILES on disk (Combell + Let's Encrypt)
 ./checkSSL.sh
 
 # Check a specific certificate (by Combell cert name or Let's Encrypt domain)
 ./checkSSL.sh essen
 
+# Check what nginx ACTUALLY SERVES for every server_name in its configs
+./checkSSL.sh --live
+
+# Check specific hostnames
+./checkSSL.sh --live de-essen.be www.de-essen.be
+
 # Use custom directories
 NGINX_CERT_DIR=/custom/path LETSENCRYPT_DIR=/etc/letsencrypt/live ./checkSSL.sh
 ```
+
+### File checks vs live checks
+
+These answer different questions, and **a passing file check does not mean visitors
+are fine**:
+
+| | `./checkSSL.sh` | `./checkSSL.sh --live` |
+|---|---|---|
+| Looks at | files on disk | a real TLS connection |
+| Answers | "is this certificate sound?" | "what does a browser actually get?" |
+
+A certificate file can be perfect while nginx still serves the *wrong* one. The
+usual cause is a `server` block that has a certificate but no `listen 443 ssl`
+— nginx then does not treat it as an HTTPS server, SNI matches nothing, and the
+**default server's** certificate is sent instead. Visitors get a name-mismatch
+warning while every file on disk still looks healthy. Only `--live` sees this.
+
+The live check verifies three things per hostname:
+
+1. **Trusted chain** — the same validation a browser performs
+2. **Right certificate** — the hostname is covered by the CN or a SAN, with
+   wildcards matched the way browsers do (`*.example.com` covers `a.example.com`
+   but not `example.com` or `a.b.example.com`)
+3. **Still valid** — not expired, with a warning under 30 days
+
+With no hostnames given it reads them from the nginx configs itself, honouring
+whichever include pattern `nginx.conf` uses (`*.conf` vs `*`), so it never reports
+hostnames nginx does not actually serve.
+
+Hostnames that are intentionally HTTP-only will be reported as serving the wrong
+certificate — which is accurate, since that *is* what a visitor typing `https://`
+receives.
 
 ### What It Checks
 
